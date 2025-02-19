@@ -57,7 +57,10 @@ class InvenioLoggingDatastreams(InvenioLoggingBase):
             user_id=user_id,
         )
         # Determine the correct index based on log_type
-        index = self.index_mapping.get(log_type)
+        search_prefix = current_app.config["SEARCH_INDEX_PREFIX"]
+        index = search_prefix + self.index_mapping.get(log_type)
+
+        # Add all the discovered fields to the log entry (IP ADDRESS,)
 
         log_entry = {
             "@timestamp": now,
