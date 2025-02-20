@@ -15,6 +15,8 @@ from flask import current_app
 from opensearchpy import OpenSearch
 
 from invenio_logging.ext import InvenioLoggingBase
+from marshmallow import ValidationError
+from .schema import LogEventSchema
 
 
 class InvenioLoggingDatastreams(InvenioLoggingBase):
@@ -36,40 +38,52 @@ class InvenioLoggingDatastreams(InvenioLoggingBase):
         """Initialize config with defaults."""
         app.config.setdefault("LOGGING_DATASTREAMS_ENABLED", True)
         app.config.setdefault("LOGGING_DATASTREAMS_HOST", "http://localhost:9200")
-        app.config.setdefault("LOGGING_DATASTREAMS_INDEXES", {
-            "audit": "logs-audit",
-            "jobs": "logs-job",
-        })
+        app.config.setdefault(
+            "LOGGING_DATASTREAMS_INDEXES",
+            {
+                "audit": "logs-audit",
+                "job": "logs-job",
+            },
+        )
         app.config.setdefault("LOGGING_DATASTREAMS_LEVEL", logging.INFO)
 
-    def log_event(self, log_type, action, resource_id, resource_type, user_id=None, json={}):
-        """Log an event to the appropriate OpenSearch Datastream based on log_type."""
+    def log_event(self, log_type, log_data):
+        """Log an event to OpenSearch with minimal processing, assuming pre-formatted log_data."""
 
         if not self.client:
             return
-        now = datetime.now().isoformat()
-        message = current_app.config["LOGGING_DATASTREAMS_MESSAGES"].get(action).format(
-            log_type=log_type,
-            action=action,
-            timestamp=now,
-            resource_id=resource_id,
-            resource_type=resource_type,
-            user_id=user_id,
-        )
-        # Determine the correct index based on log_type
-        search_prefix = current_app.config["SEARCH_INDEX_PREFIX"]
-        index = search_prefix + self.index_mapping.get(log_type)
 
-        # Add all the discovered fields to the log entry (IP ADDRESS,)
+        try:
+            # Ensure timestamp is present and in UTC format
+            if "timestamp" not in log_data:
+                log_data["timestamp"] = datetime.now()
 
-        log_entry = {
-            "@timestamp": now,
-            "action": action,
-            "resource_id": resource_id,
-            "resource_type": resource_type,
-            "user_id": user_id,
-            "message": message,
-            # "json": json,
-        }
+            action = log_data.get("event", {}).get("action")
+            # Fetch message template from config
+            message_template = (current_app.config["LOGGING_DATASTREAMS_MESSAGES"]
+                .get(action, f"{action} event occurred")
+                .format(**log_data, **log_data.get("process", {}), **log_data.get("user", {}))
+            )
+            message = (
+                message_template.format(**log_data)
+                if message_template
+                else f"{log_data.get('action')} event occurred"
+            )
+            log_data["message"] = message
 
-        self.client.index(index=index, body=log_entry)
+            # Validate log data using the Marshmallow schema
+            validated_log = LogEventSchema().dump(log_data)
+
+            # Determine the correct index based on log_type
+            search_prefix = current_app.config["SEARCH_INDEX_PREFIX"]
+            index = search_prefix + self.index_mapping.get(log_type)
+            import pdb
+
+            pdb.set_trace()
+            # Send the validated log to OpenSearch
+            self.client.index(index=index, body=validated_log)
+
+        except ValidationError as e:
+            print(f"Invalid log data: {e.messages}")
+        except Exception as e:
+            print(f"Error logging event: {e}")

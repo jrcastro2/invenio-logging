@@ -1,34 +1,51 @@
 {
-    "index_patterns": ["__SEARCH_INDEX_PREFIX__logs-*"],
-    "data_stream": {},
-    "template": {
-      "mappings": {
-        "properties": {
-          "@timestamp": {
-            "type": "date"
-          },
-          "action": {
-            "type": "keyword"
-          },
-          "log_type": {
-            "type": "keyword"
-          },
-          "resource_id": {
-            "type": "keyword"
-          },
-          "resource_type": {
-            "type": "keyword"
-          },
-          "user_id": {
-            "type": "keyword"
-          },
-          "message": {
-            "type": "text"
-          },
-          "json": {
-            "type": "object"
+  "index_patterns": ["__SEARCH_INDEX_PREFIX__logs-*"],
+  "data_stream": {},
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "event": {
+          "properties": {
+            "action": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "dataset": { "type": "keyword" }
           }
+        },
+        "message": {
+          "type": "text"
+        },
+        "user": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "name": { "type": "keyword" }
+          }
+        },
+        "process": {
+          "properties": {
+            "entity_id": { "type": "keyword" }, 
+            "name": { "type": "keyword" }, 
+            "parent": {
+              "properties": {
+                "entity_id": { "type": "keyword" },
+                "name": { "type": "keyword" },
+                "start": { "type": "date" },
+                "end": { "type": "date" },
+                "exit_code": { "type": "integer" }
+              }
+            },
+            "start": { "type": "date" },
+            "end": { "type": "date" },
+            "exit_code": { "type": "integer" }
+          }
+        },
+        "json": {
+          "type": "object"
         }
       }
     }
   }
+}
